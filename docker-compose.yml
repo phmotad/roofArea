@@ -1,0 +1,46 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: roof-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: roof_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - roof-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d roof_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    container_name: roof-api
+    entrypoint: []
+    command: ["sh", "-c", "alembic upgrade head && exec uvicorn roof_api.main:app --host 0.0.0.0 --port 8000"]
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/roof_db
+      DATABASE_SYNC_URL: postgresql://postgres:postgres@db:5432/roof_db
+      LIDAR_DGT_PATH: /app/lidar
+      LIDAR_PNOA_PATH: /app/lidar
+      SEGMENTATION_MODEL_PATH: /app/models/unet_roof_multiclass.pt
+      SEGMENTATION_NUM_CLASSES: "5"
+    volumes:
+      - ./src:/app/src:ro
+      - ./lidar:/app/lidar:ro
+      - ./models:/app/models:ro
+      - ./alembic:/app/alembic:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  roof-db-data:
