@@ -1,5 +1,6 @@
 """
 Train U-Net for roof segmentation. Saves checkpoint compatible with load_unet().
+Each epoch saves a "last" checkpoint to <output_stem>_last.pt; use --resume to continue after disconnect.
 
 Usage:
   python -m scripts.train_unet --data_dir ./data/roof --output ./models/unet_roof.pt
@@ -26,7 +27,7 @@ _root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_root))
 sys.path.insert(0, str(_root / "src"))
 
-from roof_api.segmentation.dataset import RoofDataset
+from roof_api.segmentation.dataset import RoofDataset, RoofSatDataset
 from roof_api.segmentation.unet_model import UNet
 
 logging.basicConfig(
@@ -163,6 +164,13 @@ def main() -> None:
         help="Root directory containing images/ and masks/ subdirs (or use --images/--masks).",
     )
     parser.add_argument(
+        "--dataset_type",
+        type=str,
+        default="default",
+        choices=("default", "roofsat"),
+        help="default: images/ + masks/ com val por split aleatório; roofsat: img_color + building_masks com train/val/test.txt.",
+    )
+    parser.add_argument(
         "--images",
         type=str,
         default="images",
@@ -250,6 +258,12 @@ def main() -> None:
         choices=("auto", "bce", "dice", "ce"),
         help="Loss: auto (bce/dice binário, ce multiclasse), bce/dice (binário), ce/dice (multiclasse). Dice ajuda com desequilíbrio (dida).",
     )
+    parser.add_argument(
+        "--resume",
+        type=str,
+        default=None,
+        help="Path to last checkpoint (e.g. ./models/unet_roof_pretrain_last.pt) to resume training from that epoch.",
+    )
     args = parser.parse_args()
 
     torch.manual_seed(args.seed)
@@ -271,30 +285,51 @@ def main() -> None:
     logger.info("Device: %s", device)
 
     data_dir = Path(args.data_dir)
-    images_dir = data_dir / args.images
-    masks_dir = data_dir / args.masks
-    if not images_dir.is_dir() or not masks_dir.is_dir():
-        logger.error("Directories not found: %s, %s", images_dir, masks_dir)
-        sys.exit(1)
-
     num_classes = max(1, int(args.num_classes))
-    full = RoofDataset(
-        images_dir,
-        masks_dir,
-        size=tuple(args.size),
-        augment=True,
-        num_classes=num_classes,
-    )
-    n = len(full)
-    if n == 0:
-        logger.error("No image/mask pairs found. Check --data_dir and subdirs.")
-        sys.exit(1)
-    n_val = max(1, int(n * args.val_ratio))
-    n_train = n - n_val
-    logger.info("Dataset: %d train, %d val", n_train, n_val)
+    size = tuple(args.size)
+
+    if args.dataset_type == "roofsat":
+        train_ds = RoofSatDataset(
+            data_dir,
+            split="train",
+            size=size,
+            augment=True,
+            num_classes=num_classes,
+        )
+        val_ds = RoofSatDataset(
+            data_dir,
+            split="val",
+            size=size,
+            augment=False,
+            num_classes=num_classes,
+        )
+        if len(train_ds) == 0:
+            logger.error("No RoofSat train pairs. Check %s (train.txt, img_color, building_masks).", data_dir)
+            sys.exit(1)
+        logger.info("Dataset RoofSat: %d train, %d val", len(train_ds), len(val_ds))
+    else:
+        images_dir = data_dir / args.images
+        masks_dir = data_dir / args.masks
+        if not images_dir.is_dir() or not masks_dir.is_dir():
+            logger.error("Directories not found: %s, %s", images_dir, masks_dir)
+            sys.exit(1)
+        full = RoofDataset(
+            images_dir,
+            masks_dir,
+            size=size,
+            augment=True,
+            num_classes=num_classes,
+        )
+        n = len(full)
+        if n == 0:
+            logger.error("No image/mask pairs found. Check --data_dir and subdirs.")
+            sys.exit(1)
+        n_val = max(1, int(n * args.val_ratio))
+        n_train = n - n_val
+        logger.info("Dataset: %d train, %d val", n_train, n_val)
+        train_ds, val_ds = random_split(full, [n_train, n_val], generator=torch.Generator().manual_seed(args.seed))
     sys.stdout.flush()
     sys.stderr.flush()
-    train_ds, val_ds = random_split(full, [n_train, n_val], generator=torch.Generator().manual_seed(args.seed))
     pin_memory = args.device == "cuda"
     train_loader = DataLoader(
         train_ds,
@@ -334,12 +369,25 @@ def main() -> None:
 
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    last_path = output_path.parent / (output_path.stem + "_last.pt")
     best_val_loss = float("inf")
+    start_epoch = 1
 
-    logger.info("Iniciando treino: %d epocas", args.epochs)
+    if args.resume:
+        resume_path = Path(args.resume)
+        if resume_path.is_file():
+            ckpt = torch.load(resume_path, map_location=device)
+            model.load_state_dict(ckpt["model"], strict=True)
+            start_epoch = ckpt.get("epoch", 0) + 1
+            best_val_loss = ckpt.get("best_val_loss", float("inf"))
+            logger.info("Resumed from %s (epoch %d, best_val_loss=%.4f)", resume_path, start_epoch - 1, best_val_loss)
+        else:
+            logger.warning("Resume path not found: %s", resume_path)
+
+    logger.info("Iniciando treino: epocas %d a %d (total %d)", start_epoch, args.epochs, args.epochs)
     sys.stdout.flush()
     sys.stderr.flush()
-    for epoch in range(1, args.epochs + 1):
+    for epoch in range(start_epoch, args.epochs + 1):
         train_loss, train_metric = train_one_epoch(
             model, train_loader, optimizer, device, criterion, num_classes=num_classes, epoch=epoch
         )
@@ -366,6 +414,15 @@ def main() -> None:
             }
             torch.save(state, output_path)
             logger.info("Saved best checkpoint to %s", output_path)
+
+        state_last = {
+            "model": model.state_dict(),
+            "epoch": epoch,
+            "best_val_loss": best_val_loss,
+            "num_classes": num_classes,
+        }
+        torch.save(state_last, last_path)
+        logger.info("Saved last checkpoint to %s (epoch %d)", last_path, epoch)
 
     logger.info("Training finished. Best model: %s", output_path)
 

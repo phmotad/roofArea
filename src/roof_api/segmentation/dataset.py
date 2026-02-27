@@ -55,6 +55,46 @@ def discover_pairs(images_dir: Path, masks_dir: Path) -> list[tuple[Path, Path]]
     return pairs
 
 
+def discover_roofsat_pairs(
+    root_dir: Path,
+    split: str = "train",
+) -> list[tuple[Path, Path]]:
+    """
+    Pares (imagem, máscara) para o dataset RoofSat.
+    Usa train.txt / val.txt / test.txt para os IDs e pastas img_color (ou img) + building_masks.
+    """
+    root = Path(root_dir)
+    list_file = root / f"{split}.txt"
+    ids: list[str] = []
+    if list_file.exists():
+        ids = [line.strip() for line in list_file.read_text(encoding="utf-8").splitlines() if line.strip()]
+    img_dir = root / "img_color" if (root / "img_color").is_dir() else root / "img"
+    mask_dir = root / "building_masks"
+    if not img_dir.is_dir() or not mask_dir.is_dir():
+        return []
+    pairs: list[tuple[Path, Path]] = []
+    for sample_id in ids:
+        for ext in (".png", ".jpg", ".jpeg"):
+            im_path = img_dir / f"{sample_id}{ext}"
+            if im_path.exists():
+                mask_path = mask_dir / f"{sample_id}.png"
+                if not mask_path.exists():
+                    mask_path = mask_dir / f"{sample_id}.tif"
+                if mask_path.exists():
+                    pairs.append((im_path, mask_path))
+                break
+    return pairs
+
+
+def load_roofsat_wireframe(npz_path: Path) -> np.ndarray:
+    """
+    Carrega segmentos de linha do ground-truth RoofSat (formato NPZ, chave 'lines').
+    Retorna array de forma (N, 2, 2): [[x1,y1], [x2,y2]] por segmento.
+    """
+    data = np.load(npz_path, allow_pickle=True)
+    return np.asarray(data["lines"], dtype=np.float64)
+
+
 class RoofDataset(Dataset):
     """
     Dataset of RGB roof images and masks.
@@ -231,3 +271,29 @@ def _augment(rgb: np.ndarray, mask: np.ndarray) -> tuple[np.ndarray, np.ndarray]
         rgb = np.clip(rgb.astype(np.float32) + noise, 0, 255).astype(np.uint8)
 
     return rgb, mask
+
+
+class RoofSatDataset(RoofDataset):
+    """
+    Dataset RoofSat: img_color (ou img) + building_masks, com splits train/val/test.
+    Segmentação binária (edifício vs fundo). Os .npz em gt/ são wireframes (uso separado).
+    """
+
+    def __init__(
+        self,
+        root_dir: str | Path,
+        split: str = "train",
+        size: tuple[int, int] = (256, 256),
+        augment: bool = False,
+        num_classes: int = 1,
+    ):
+        root = Path(root_dir)
+        pairs = discover_roofsat_pairs(root, split)
+        if not pairs:
+            logger.warning("No RoofSat pairs for split %s in %s", split, root)
+        self.images_dir = root
+        self.masks_dir = root
+        self.size = size
+        self.augment = augment
+        self.num_classes = max(1, int(num_classes))
+        self.pairs = pairs
