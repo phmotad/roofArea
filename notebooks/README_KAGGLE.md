@@ -14,6 +14,18 @@ Usar o Kaggle para pré-treino (Inria) + fine-tuning (chips multiclasse) com GPU
 
 ---
 
+## Se só aparecer CPU (sem opção GPU)
+
+No Kaggle, a **GPU só fica disponível** se:
+
+1. **Verificação por telemóvel** — Na conta Kaggle: **Settings → Phone verification**. Sem verificação, o Accelerator fica só com **None** (CPU).
+2. **Quota semanal** — Na conta gratuita há um limite de horas de GPU por semana (ex.: 30 h). Quando esgota, o dropdown pode mostrar só CPU até à semana seguinte.
+3. **Escolher GPU ao criar o notebook** — No painel direito: **Settings → Accelerator → GPU T4 x2** (ou P100). Se não vires "GPU", verifica o ponto 1.
+
+**Se só tiveres CPU:** o notebook corre na mesma, mas o treino fica muito mais lento (horas em vez de minutos). Podes reduzir épocas nas células de treino (ex.: `--epochs 5`) para testar.
+
+---
+
 ## Passo 1: Preparar os dados e gerar os zips
 
 Tens três fontes de dados no projeto:
