@@ -6,10 +6,11 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: roof_db
-    ports:
-      - "5432:5432"
     volumes:
       - roof-db-data:/var/lib/postgresql/data
+      - ./docker/init-db:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d roof_db"]
       interval: 5s
@@ -19,28 +20,23 @@ services:
   api:
     build: .
     container_name: roof-api
-    entrypoint: []
-    command: ["sh", "-c", "alembic upgrade head && exec uvicorn roof_api.main:app --host 0.0.0.0 --port 8000"]
-    ports:
-      - "8000:8000"
-    env_file:
-      - .env
+    env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/roof_db
       DATABASE_SYNC_URL: postgresql://postgres:postgres@db:5432/roof_db
       LIDAR_DGT_PATH: /app/lidar
       LIDAR_PNOA_PATH: /app/lidar
-      SEGMENTATION_MODEL_PATH: /app/models/unet_roof_multiclass.pt
-      SEGMENTATION_NUM_CLASSES: "5"
+      SEGMENTATION_MODEL_PATH: /app/models/deeplabv3_roof_multiclass.pt
+      SEGMENTATION_LINES_MODEL_PATH: /app/models/unet_lines.pt
+      CACHE_TTL_SECONDS: "0"
     volumes:
-      - ./src:/app/src:ro
       - ./lidar:/app/lidar:ro
       - ./models:/app/models:ro
-      - ./alembic:/app/alembic:ro
+    ports:
+      - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
-    restart: unless-stopped
 
 volumes:
   roof-db-data:
