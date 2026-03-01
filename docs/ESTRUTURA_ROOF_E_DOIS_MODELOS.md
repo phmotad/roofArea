@@ -24,6 +24,22 @@ roof/
 
 ---
 
+## Classes em chips_multiclass (5 classes)
+
+Para o modelo identificar **telhado**, **divisorias entre casas**, **águas**, **claraboias** e **lajes**, as máscaras devem usar estes valores de pixel:
+
+| Classe | Valor | Descrição |
+|--------|-------|-----------|
+| Fundo | 0 | Tudo o que não é telhado (solo, ruas, vegetação). |
+| Águas | 1 | Planos inclinados do telhado (cada “água” é um plano). |
+| Claraboia | 2 | Claraboias / janelas de telhado. |
+| **Divisória** | 3 | **Fronteira entre telhados de casas diferentes** (quando dois telhados estão “grudados”). Marcar bem esta classe permite à API separar casa a casa. |
+| Laje | 4 | Lajes / coberturas planas. |
+
+**Anotação:** Nas imagens onde dois ou mais telhados de casas diferentes se tocam, desenhar a **divisória** (classe 3) na linha de fronteira entre edifícios. O modelo usa esta classe para não misturar águas de casas diferentes.
+
+---
+
 ## Como fica o treino (notebook Kaggle)
 
 1. **Construir roof/** — Se não existir uma pasta `roof/` em input, o notebook descarrega Inria (se necessário), corre `prepare_roof_structure` e gera `/kaggle/working/roof`.

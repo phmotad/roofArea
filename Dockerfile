@@ -1,19 +1,23 @@
-FROM python:3.11-slim
+# API Roof – FastAPI + U-Net (segmentação de telhados)
+FROM python:3.12-slim
 
+# Runtime libs: rasterio (libexpat), opencv/numpy (libgomp). Evita ImportError ao importar rasterio e cv2.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libexpat1 \
-    libgdal-dev \
-    gdal-bin \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-COPY pyproject.toml ./
-COPY src ./src
-COPY alembic.ini ./
-COPY alembic ./alembic
-
+COPY pyproject.toml README.md ./
+COPY src src/
 RUN pip install --no-cache-dir -e .
+
+COPY alembic.ini .
+COPY alembic alembic/
+
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8000
 

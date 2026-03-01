@@ -15,11 +15,18 @@ setup_logging()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     import logging
+    log = logging.getLogger(__name__)
+    try:
+        import rasterio  # noqa: F401 - fail fast if libexpat/libgdal missing
+        import cv2  # noqa: F401
+    except (ImportError, OSError) as e:
+        log.error("Startup: dependências de runtime em falta (rasterio/cv2): %s", e)
+        raise
     try:
         from roof_api.db import init_db
         await init_db()
     except Exception as e:
-        logging.getLogger(__name__).warning("DB init skipped: %s", e)
+        log.warning("DB init skipped: %s", e)
     yield
     pass
 

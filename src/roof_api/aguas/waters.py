@@ -16,6 +16,9 @@ logger = logging.getLogger(__name__)
 
 MIN_PIXELS_TO_SPLIT = 150
 MIN_ASPECT_DIFF_DEG = 45
+LINES_PROB_THRESHOLD = 0.35
+LINES_DILATE_RADIUS = 2
+MIN_PIXELS_PER_SPLIT = 40
 
 
 @dataclass
@@ -168,19 +171,106 @@ def _try_split_region_by_aspect(
     ]
 
 
+def _try_split_region_by_lines(
+    reg,
+    lines_map: np.ndarray,
+    bounds: tuple[float, float, float, float],
+    h: int,
+    w: int,
+    region_label: int,
+    slope_deg: np.ndarray,
+    aspect_deg: np.ndarray,
+) -> list[WaterPolygon]:
+    """
+    If a strong line crosses the region (ridge/edge), split into two WaterPolygons.
+    """
+    if reg.area < MIN_PIXELS_TO_SPLIT:
+        return []
+    crop = lines_map[reg.slice]
+    if crop.size == 0 or crop.shape != reg.image.shape:
+        return []
+    line_bin = (crop > LINES_PROB_THRESHOLD) & reg.image.astype(bool)
+    if line_bin.sum() < 10:
+        return []
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (LINES_DILATE_RADIUS * 2 + 1,) * 2)
+    line_dilated = cv2.dilate(line_bin.astype(np.uint8), kernel).astype(bool)
+    region_mask = reg.image.astype(bool)
+    without_line = region_mask & ~line_dilated
+    labeled_split = measure.label(without_line.astype(np.uint8), connectivity=2)
+    regions_split = measure.regionprops(labeled_split)
+    if len(regions_split) < 2:
+        return []
+    by_area = sorted(regions_split, key=lambda r: r.area, reverse=True)
+    r0, r1 = by_area[0], by_area[1]
+    if r0.area < MIN_PIXELS_PER_SPLIT or r1.area < MIN_PIXELS_PER_SPLIT:
+        return []
+    rr0, cc0 = reg.slice[0].start, reg.slice[1].start
+    coords0 = np.column_stack([r0.coords[:, 0] + rr0, r0.coords[:, 1] + cc0])
+    coords1 = np.column_stack([r1.coords[:, 0] + rr0, r1.coords[:, 1] + cc0])
+    poly0 = _coords_to_polygon(coords0, bounds, h, w)
+    poly1 = _coords_to_polygon(coords1, bounds, h, w)
+    if poly0 is None or poly1 is None:
+        return []
+    r0 = np.clip(coords0[:, 0], 0, h - 1)
+    c0 = np.clip(coords0[:, 1], 0, w - 1)
+    r1 = np.clip(coords1[:, 0], 0, h - 1)
+    c1 = np.clip(coords1[:, 1], 0, w - 1)
+    sl0 = float(np.nanmean(slope_deg[r0, c0]) or 0)
+    sl1 = float(np.nanmean(slope_deg[r1, c1]) or 0)
+    ap0 = _mean_aspect_deg(aspect_deg[r0, c0])
+    ap1 = _mean_aspect_deg(aspect_deg[r1, c1])
+    area0_px = len(coords0)
+    area1_px = len(coords1)
+    area_plana_m2_0 = _pixel_to_m2(area0_px, bounds, h, w)
+    area_plana_m2_1 = _pixel_to_m2(area1_px, bounds, h, w)
+    sl0_rad = math.radians(sl0)
+    sl1_rad = math.radians(sl1)
+    area_real_0 = area_plana_m2_0 / math.cos(sl0_rad) if sl0_rad >= 1e-6 else area_plana_m2_0
+    area_real_1 = area_plana_m2_1 / math.cos(sl1_rad) if sl1_rad >= 1e-6 else area_plana_m2_1
+    return [
+        WaterPolygon(
+            area_plana_m2=area_plana_m2_0,
+            area_real_m2=area_real_0,
+            inclinacao_graus=sl0,
+            orientacao_azimute=ap0,
+            polygon=poly0,
+            pixel_area=float(area0_px),
+            region_label=region_label,
+        ),
+        WaterPolygon(
+            area_plana_m2=area_plana_m2_1,
+            area_real_m2=area_real_1,
+            inclinacao_graus=sl1,
+            orientacao_azimute=ap1,
+            polygon=poly1,
+            pixel_area=float(area1_px),
+            region_label=region_label,
+        ),
+    ]
+
+
 def compute_waters(
     mask: np.ndarray,
     dsm: np.ndarray | None,
     bounds: tuple[float, float, float, float],
+    lines_map: np.ndarray | None = None,
 ) -> list[WaterPolygon]:
     """
     mask: HxW bool. dsm: HxW float or None (fallback).
     bounds: (minx, miny, maxx, maxy) WGS84 for area conversion.
+    lines_map: optional HxW float (prob pixel on line) from unet_lines for splitting águas.
     Returns list of WaterPolygon with area_plana_m2, area_real_m2, slope, aspect, polygon.
     """
     h, w = mask.shape[:2]
-    if dsm is not None and dsm.shape[:2] != (h, w):
-        dsm = cv2.resize(dsm, (w, h), interpolation=cv2.INTER_LINEAR)
+    if dsm is not None:
+        dsm_h, dsm_w = dsm.shape[:2]
+        if dsm_h == 0 or dsm_w == 0:
+            dsm = None
+        elif (dsm_h, dsm_w) != (h, w):
+            try:
+                dsm = cv2.resize(dsm, (w, h), interpolation=cv2.INTER_LINEAR)
+            except cv2.error:
+                dsm = None
 
     if dsm is not None:
         from roof_api.aguas.slope_aspect import slope_aspect_from_dsm
@@ -198,13 +288,21 @@ def compute_waters(
         if reg.area < 30:
             continue
         region_label = int(reg.label)
-        if dsm is not None and reg.area >= MIN_PIXELS_TO_SPLIT:
-            split_waters = _try_split_region_by_aspect(
-                reg, aspect_deg, slope_deg, bounds, h, w, region_label
-            )
-            if split_waters:
-                waters.extend(split_waters)
-                continue
+        if reg.area >= MIN_PIXELS_TO_SPLIT:
+            if lines_map is not None and lines_map.shape[:2] == (h, w):
+                split_waters = _try_split_region_by_lines(
+                    reg, lines_map, bounds, h, w, region_label, slope_deg, aspect_deg
+                )
+                if split_waters:
+                    waters.extend(split_waters)
+                    continue
+            if dsm is not None:
+                split_waters = _try_split_region_by_aspect(
+                    reg, aspect_deg, slope_deg, bounds, h, w, region_label
+                )
+                if split_waters:
+                    waters.extend(split_waters)
+                    continue
         sl = float(np.nanmean(slope_deg[reg.slice][reg.image]) or 0)
         ap_deg = float(np.nanmean(aspect_deg[reg.slice][reg.image]) or 0)
         sl_rad = math.radians(sl)

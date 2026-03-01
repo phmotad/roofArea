@@ -39,7 +39,7 @@ def predict(model: nn.Module, rgb: np.ndarray, device: torch.device) -> np.ndarr
         out = model(x)
     out_channels = out.shape[1]
     if out_channels == 1:
-        logits = out.squeeze(1).cpu().numpy()
+        logits = out.squeeze().cpu().numpy()
         if logits.shape != rgb.shape[:2]:
             logits = cv2.resize(
                 logits,
@@ -58,6 +58,59 @@ def predict(model: nn.Module, rgb: np.ndarray, device: torch.device) -> np.ndarr
     probs = exp_logits / exp_logits.sum(axis=0, keepdims=True)
     prob_agua = probs[1].astype(np.float32)
     return prob_agua
+
+
+def predict_roof_prob(model: nn.Module, rgb: np.ndarray, device: torch.device) -> np.ndarray:
+    """
+    Returns HxW float32: probability that pixel is roof (any roof class).
+    - 1-channel model: sigmoid(logits).
+    - Multiclass: 1 - prob_class_0 (fundo).
+    """
+    import cv2
+    x = torch.from_numpy(rgb).permute(2, 0, 1).float().div(255.0).unsqueeze(0).to(device)
+    with torch.no_grad():
+        out = model(x)
+    out_channels = out.shape[1]
+    h_in, w_in = rgb.shape[0], rgb.shape[1]
+    if out_channels == 1:
+        logits = out.squeeze().cpu().numpy()
+        if logits.shape != rgb.shape[:2]:
+            logits = cv2.resize(logits, (rgb.shape[1], rgb.shape[0]), interpolation=cv2.INTER_LINEAR)
+        logits = logits.astype(np.float32)
+        return (1.0 / (1.0 + np.exp(-np.clip(logits, -20, 20)))).astype(np.float32)
+    logits_np = out.cpu().numpy().squeeze(0)
+    if logits_np.shape[1] != h_in or logits_np.shape[2] != w_in:
+        logits_np = np.stack([
+            cv2.resize(logits_np[i], (w_in, h_in), interpolation=cv2.INTER_LINEAR)
+            for i in range(logits_np.shape[0])
+        ], axis=0)
+    exp_logits = np.exp(logits_np - logits_np.max(axis=0, keepdims=True))
+    probs = exp_logits / exp_logits.sum(axis=0, keepdims=True)
+    prob_roof = (1.0 - probs[0]).astype(np.float32)
+    return prob_roof
+
+
+def predict_multiclass_probs(model: nn.Module, rgb: np.ndarray, device: torch.device) -> np.ndarray | None:
+    """
+    Multiclass only. Returns HxWxC float32 (C = num_classes), or None if model is 1-channel.
+    """
+    import cv2
+    x = torch.from_numpy(rgb).permute(2, 0, 1).float().div(255.0).unsqueeze(0).to(device)
+    with torch.no_grad():
+        out = model(x)
+    out_channels = out.shape[1]
+    if out_channels == 1:
+        return None
+    h_in, w_in = rgb.shape[0], rgb.shape[1]
+    logits_np = out.cpu().numpy().squeeze(0)
+    if logits_np.shape[1] != h_in or logits_np.shape[2] != w_in:
+        logits_np = np.stack([
+            cv2.resize(logits_np[i], (w_in, h_in), interpolation=cv2.INTER_LINEAR)
+            for i in range(logits_np.shape[0])
+        ], axis=0)
+    exp_logits = np.exp(logits_np - logits_np.max(axis=0, keepdims=True))
+    probs = exp_logits / exp_logits.sum(axis=0, keepdims=True)
+    return probs.astype(np.float32)
 
 
 class UNet(nn.Module):

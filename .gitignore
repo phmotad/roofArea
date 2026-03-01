@@ -10,7 +10,9 @@ build/
 *.pt
 *.pth
 models/
+!models/README.md
 *.tif
 *.tiff
 *.rar
 .cursor/
+imagens_teste/

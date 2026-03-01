@@ -30,9 +30,10 @@ async def analisar_telhado(
     try:
         result = await analyse_roof(lat=body.lat, lon=body.lon)
     except ValueError as e:
-        if "coordenadas" in str(e).lower() or "invalid" in str(e).lower():
+        msg = str(e).lower()
+        if "coordenadas inválidas" in msg or "invalid" in msg:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-        if "sem dados" in str(e).lower() or "not found" in str(e).lower():
+        if "nenhum telhado" in msg or "sem dados" in msg or "not found" in msg:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

@@ -20,6 +20,6 @@ models/*.pt
 docs
 tests
 scripts
-README.md
 *.md
+!README.md
 !pyproject.toml
