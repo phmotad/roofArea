@@ -40,6 +40,7 @@ def main() -> None:
     parser.add_argument("--inria", type=str, default=None, help="Pasta Inria com images/ e masks/")
     parser.add_argument("--roofsat", type=str, default=None, help="Pasta RoofSat (img_color, building_masks, gt)")
     parser.add_argument("--chips_multiclass", type=str, default=None, help="Pasta chips_multiclass com images/ e masks/")
+    parser.add_argument("--archive", type=str, default=None, help="Pasta archive com train/image e train/label (estrutura AIRS)")
     args = parser.parse_args()
 
     inria_base = Path(args.inria) if args.inria else _root / "dados_inria"
@@ -114,6 +115,37 @@ def main() -> None:
     print("roof/chips_segmentos:", idx_seg, "pares (images + npz)")
     if idx_seg == 0:
         print("  (sem .npz em gt/; adiciona ficheiros .npz para treinar o modelo de linhas)")
+
+    # --- roof/archive (AIRS: train/image, train/label) ---
+    archive_base = Path(args.archive) if args.archive else None
+    if archive_base and archive_base.is_dir():
+        for split in ("train", "val", "test"):
+            for im_name, mask_name in [("image", "label"), ("images", "masks")]:
+                src_im = archive_base / split / im_name
+                src_mask = archive_base / split / mask_name
+                if src_im.is_dir() and src_mask.is_dir():
+                    dst_im = out / "archive" / split / im_name
+                    dst_mask = out / "archive" / split / mask_name
+                    dst_im.mkdir(parents=True, exist_ok=True)
+                    dst_mask.mkdir(parents=True, exist_ok=True)
+                    n = 0
+                    for f in src_im.iterdir():
+                        if f.suffix.lower() not in (".png", ".jpg", ".jpeg", ".tif", ".tiff"):
+                            continue
+                        stem = f.stem
+                        m = src_mask / f"{stem}{f.suffix}"
+                        if not m.exists():
+                            for ext in (".png", ".tif", ".tiff"):
+                                m = src_mask / f"{stem}{ext}"
+                                if m.exists():
+                                    break
+                        if m.exists():
+                            shutil.copy2(f, dst_im / f.name)
+                            shutil.copy2(m, dst_mask / m.name)
+                            n += 1
+                    if n:
+                        print("roof/archive/%s: %d pares" % (split, n))
+                    break
 
     print("Estrutura em", out.resolve(), "pronta.")
 
