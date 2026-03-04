@@ -1,28 +1,23 @@
-# Testar POST /telhado/analisar com coordenadas cobertas pelo LIDAR (lidar/); imagens na raiz: telhado_{id}_imagem.png
-# A API deve estar a correr a partir da raiz do projeto (onde está o .env) e reiniciada após alterar .env
+# Testar POST /telhado/analisar; imagens na raiz: telhado_{id}_imagem.png
+# A API deve estar a correr a partir da raiz do projeto (onde está o .env)
+# Sem LIDAR: usa coordenadas fixas (Portugal). Com LIDAR: usa coords_covered_by_lidar se existir.
 $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $scriptDir
 $baseUrl = "http://localhost:8000"
 
-$pythonScript = Join-Path $scriptDir "scripts\coords_covered_by_lidar.py"
-$coordsFromLidar = @()
-if (Test-Path $pythonScript) {
-    $lines = & python -m scripts.coords_covered_by_lidar --max 10 2>$null
-    foreach ($line in $lines) {
-        $line = $line.Trim()
-        if ($line -match "^([\d.-]+),([\d.-]+)$") {
-            $coordsFromLidar += @{ lat = [double]$Matches[1]; lon = [double]$Matches[2] }
-        }
-    }
-}
-if (-not $coordsFromLidar.Count) {
-    Write-Host "Nenhuma coordenada coberta pelo LIDAR. Coloque GeoTIFFs em lidar/ e confirme LIDAR_DGT_PATH no .env"
-    exit 1
-}
-$coords = $coordsFromLidar
+# Coordenadas fixas para teste (sem depender de LIDAR)
+$coordsFixas = @(
+    @{ lat = 38.843172347881364; lon = -9.198009875768737 },
+    @{ lat = 38.84380801524735;  lon = -9.19820031567115 },
+    @{ lat = 38.843717465063264; lon = -9.197987294607593 },
+    @{ lat = 38.84464501070205;  lon = -9.19659456422345 },
+    @{ lat = 38.823245; lon = -9.163455 }
+)
+
+$coords = $coordsFixas
 $total = $coords.Count
-Write-Host "A usar $total coordenadas cobertas pelo LIDAR (lidar/)"
+Write-Host "A usar $total coordenadas (teste sem LIDAR)"
 $n = 0
 foreach ($c in $coords) {
     $n++

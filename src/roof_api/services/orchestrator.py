@@ -1,4 +1,4 @@
-"""Orchestrate full pipeline: ortho -> segment -> DSM -> waters -> persist -> image."""
+"""Orchestrate production pipeline: ortho -> DeepLabV3 -> mask -> LIDAR crop -> clustering by slope -> waters -> area per instance -> PostGIS."""
 
 import base64
 import logging
@@ -15,10 +15,15 @@ from geoalchemy2 import WKTElement
 from roof_api.services.dtos import AnaliseTelhadoResult, AguaDto
 from roof_api.db.models import Telhado, AguaTelhado
 from roof_api.db.session import async_session_factory
-from roof_api.core.config import settings
+from roof_api.core.config import settings, resolve_segmentation_model_path
 from roof_api.geo import fetch_ortho
 from roof_api.lidar import get_dsm_for_bounds, LidarSource
-from roof_api.segmentation import segment_roof_mask, segment_lines_map, segment_waters_mask
+from roof_api.segmentation import (
+    segment_roof_mask,
+    segment_roof_and_waters,
+    segment_lines_map,
+    segment_waters_mask,
+)
 from roof_api.aguas import compute_waters
 from roof_api.visualization import render_roof_image
 from roof_api.services.cache import get_cached_result, set_cached_result
@@ -71,9 +76,14 @@ async def analyse_roof(lat: float, lon: float) -> AnaliseTelhadoResult:
 
     rgb, bounds = fetch_ortho(lat, lon)
     minx, miny, maxx, maxy = bounds
-    mask = segment_roof_mask(rgb)
+    num_classes = getattr(settings, "segmentation_num_classes", 5) or 5
+    model_path = resolve_segmentation_model_path(settings.segmentation_model_path)
+    if num_classes >= 5 and model_path.is_file():
+        mask, waters_mask = segment_roof_and_waters(rgb)
+    else:
+        mask = segment_roof_mask(rgb)
+        waters_mask = segment_waters_mask(rgb)
     lines_map = segment_lines_map(rgb)
-    waters_mask = segment_waters_mask(rgb)
     dsm, _, lidar_source = get_dsm_for_bounds(minx, miny, maxx, maxy)
     waters_all = compute_waters(mask, dsm, bounds, lines_map=lines_map)
     # Fluxo: (lat,lon) deve bater em cima de um telhado -> selecionar só esse componente (área >= min_roof_area_m2) -> área total só desse telhado

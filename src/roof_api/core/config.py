@@ -21,6 +21,19 @@ def _env_file_path() -> str:
     return ".env"
 
 
+def _project_root() -> Path:
+    """Project root (parent of src)."""
+    return Path(__file__).resolve().parent.parent.parent
+
+
+def resolve_segmentation_model_path(path: str) -> Path:
+    """Resolve model path: if relative, relative to project root so it works from any cwd."""
+    p = Path(path)
+    if p.is_absolute():
+        return p
+    return _project_root() / path
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=_env_file_path(),
@@ -35,11 +48,10 @@ class Settings(BaseSettings):
     mapbox_access_token: str = ""
     lidar_dgt_path: str = ""
     lidar_pnoa_path: str = ""
-    segmentation_model_path: str = "./models/deeplabv3_roof_multiclass.pt"
+    segmentation_model_path: str = "models/deeplabv3_roof_multiclass.pt"
     segmentation_num_classes: int = 5
     segmentation_deeplab_backbone: Literal["resnet50", "resnet101", "mobilenet_v3_large"] = "resnet50"
     segmentation_prob_threshold: float = 0.6
-    segmentation_lines_model_path: str = ""
     output_image_base64: bool = False
     cache_ttl_seconds: int = 86400
     min_roof_area_m2: float = 10.0

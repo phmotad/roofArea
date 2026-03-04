@@ -159,8 +159,18 @@ class RoofDataset(Dataset):
             img = img.convert("L")
         arr = np.array(img, dtype=np.int64)
         if self.num_classes > 1:
+            # Suportar masks gravadas como IDs (0..K-1) ou como níveis de cinza.
+            # Para 3 classes, é comum usar 0/127/255 (preto/cinza/branco).
             if arr.max() > 10:
-                arr = np.round(arr / 51.0).clip(0, self.num_classes - 1).astype(np.int64)
+                if self.num_classes == 3:
+                    # Mapeia [0..63]→0, [64..191]→1, [192..255]→2
+                    out = np.zeros_like(arr, dtype=np.int64)
+                    out[arr >= 64] = 1
+                    out[arr >= 192] = 2
+                    arr = out
+                else:
+                    # Heurística genérica: 0..255 em ~K níveis (ex.: 0,51,102,153,204)
+                    arr = np.round(arr / 51.0).clip(0, self.num_classes - 1).astype(np.int64)
             else:
                 arr = np.clip(arr, 0, self.num_classes - 1).astype(np.int64)
             return arr

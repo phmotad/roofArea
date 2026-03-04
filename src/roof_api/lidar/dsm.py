@@ -14,6 +14,24 @@ logger = logging.getLogger(__name__)
 DSM_EXTENSIONS = (".tif", ".tiff", ".TIF", ".TIFF")
 
 
+def _raster_bounds_wgs84(path: Path) -> Tuple[float, float, float, float] | None:
+    """Return (minx, miny, maxx, maxy) in WGS84 for a GeoTIFF, or None on error."""
+    import rasterio
+    from rasterio.warp import transform_bounds
+    try:
+        with rasterio.open(path) as src:
+            rb = src.bounds
+            if src.crs and src.crs.is_geographic:
+                return rb.left, rb.bottom, rb.right, rb.top
+            rminx, rminy, rmaxx, rmaxy = transform_bounds(
+                src.crs, "EPSG:4326", rb.left, rb.bottom, rb.right, rb.top
+            )
+            return rminx, rminy, rmaxx, rmaxy
+    except Exception as e:
+        logger.debug("Cannot read bounds of %s: %s", path, e)
+        return None
+
+
 class LidarSource(Enum):
     DGT = "dgt"
     PNOA = "pnoa"
@@ -109,3 +127,50 @@ def get_dsm_for_bounds(
 
     logger.info("No LIDAR/DSM available for bounds; fallback mode")
     return None, None, None
+
+
+def get_lidar_coverage() -> list[dict]:
+    """
+    Return list of bounding boxes (WGS84) covered by the configured LIDAR/DSM.
+    Each item: {"minx", "miny", "maxx", "maxy", "source": "DGT"|"PNOA", "path": str}.
+    Use to know which (lat, lon) have DSM data: point (lon, lat) is covered if it lies inside any box.
+    """
+    out: list[dict] = []
+    for path_attr, source in [
+        (settings.lidar_dgt_path, LidarSource.DGT),
+        (settings.lidar_pnoa_path, LidarSource.PNOA),
+    ]:
+        if not path_attr:
+            continue
+        p = Path(path_attr)
+        if not p.exists():
+            continue
+        if p.is_file():
+            b = _raster_bounds_wgs84(p)
+            if b:
+                minx, miny, maxx, maxy = b
+                out.append({
+                    "minx": minx, "miny": miny, "maxx": maxx, "maxy": maxy,
+                    "source": source.name,
+                    "path": str(p),
+                })
+        else:
+            for f in sorted(p.rglob("*")):
+                if f.suffix in DSM_EXTENSIONS and f.is_file():
+                    b = _raster_bounds_wgs84(f)
+                    if b:
+                        minx, miny, maxx, maxy = b
+                        out.append({
+                            "minx": minx, "miny": miny, "maxx": maxx, "maxy": maxy,
+                            "source": source.name,
+                            "path": str(f),
+                        })
+    return out
+
+
+def lidar_covers_point(lat: float, lon: float) -> bool:
+    """True if any configured DSM covers the point (lat, lon) in WGS84."""
+    for item in get_lidar_coverage():
+        if item["minx"] <= lon <= item["maxx"] and item["miny"] <= lat <= item["maxy"]:
+            return True
+    return False

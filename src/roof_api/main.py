@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from roof_api.core.logging import setup_logging
-from roof_api.api.routes import telhado_router
+from roof_api.api.routes import telhado_router, lidar_router
 from roof_api.api.routes.assets import router as assets_router
 
 setup_logging()
@@ -45,4 +45,5 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(telhado_router)
+app.include_router(lidar_router)
 app.include_router(assets_router)

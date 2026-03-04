@@ -2,7 +2,7 @@
 
 ## Visão geral
 
-A Roof API é uma API geoespacial que analisa telhados a partir de coordenadas (lat/lon): adquire ortofoto e DSM LIDAR, segmenta o telhado com U-Net, calcula águas por slope/aspect, áreas 3D e persiste em PostGIS.
+A Roof API é uma API geoespacial que analisa telhados a partir de coordenadas (lat/lon): adquire ortofoto e DSM LIDAR, segmenta o telhado com DeepLabV3+, calcula águas por slope/aspect, áreas 3D e persiste em PostGIS.
 
 ## Diagrama de fluxo
 
@@ -16,7 +16,7 @@ flowchart LR
     Lidar[DSM LIDAR]
   end
   subgraph processamento [Processamento]
-    Unet[U-Net máscara]
+    DeepLab[DeepLabV3+ máscara]
     Post[Pós morfológico]
     SlopeAspect[Slope/Aspect]
     Aguas[Agrupamento águas]
@@ -28,8 +28,8 @@ flowchart LR
   end
   Coords --> Orto
   Coords --> Lidar
-  Orto --> Unet
-  Unet --> Post
+  Orto --> DeepLab
+  DeepLab --> Post
   Post --> SlopeAspect
   Lidar --> SlopeAspect
   SlopeAspect --> Aguas
@@ -47,7 +47,7 @@ flowchart LR
 | `db` | SQLAlchemy, PostGIS (telhados, aguas_telhado) |
 | `geo` | Bounds a partir de ponto, aquisição de ortofoto |
 | `lidar` | Obtenção de DSM (DGT/PNOA), fallback |
-| `segmentation` | U-Net, pós-processamento morfológico, máscara binária |
+| `segmentation` | DeepLabV3+, pós-processamento morfológico, máscara binária |
 | `aguas` | Slope/aspect, agrupamento, vetorização, área 3D |
 | `visualization` | Geração de PNG (base + máscara + águas + labels) |
 | `services` | Orquestrador, cache, image store |
@@ -62,4 +62,4 @@ flowchart LR
 
 - Ortofoto: URL de tiles ou WMS (configurável).
 - LIDAR: ficheiros ou serviços DSM para Portugal (DGT) e Espanha (PNOA).
-- Modelo U-Net: ficheiro de pesos (opcional; sem modelo usa heurística).
+- Modelo DeepLabV3+: ficheiro de pesos (opcional; sem modelo usa heurística).

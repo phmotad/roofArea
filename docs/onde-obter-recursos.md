@@ -135,14 +135,14 @@ Nenhuma destas fontes é uma “URL de tile única” que possas colocar diretam
 
 ---
 
-## 4. Modelo U-Net (SEGMENTATION_MODEL_PATH)
+## 4. Modelo DeepLabV3+ (SEGMENTATION_MODEL_PATH)
 
-**O que é:** Checkpoint PyTorch (`.pt`) do modelo de segmentação de telhados.
+**O que é:** Checkpoint PyTorch (`.pt`) do modelo de segmentação de telhados (DeepLabV3+).
 
 **Onde obter:**
 
-- **Treino próprio:** O projeto inclui script e documentação para treinar com os teus dados. Ver [docs/treino-unet.md](treino-unet.md). Precisas de pares imagem RGB + máscara binária (telhado = branco).
-- **Sem ficheiro:** Se o path não existir ou estiver vazio, a API usa **heurística** (threshold + morfologia) em vez do U-Net. Funciona para testes; para produção é melhor treinar e colocar o `.pt` em `./models/unet_roof.pt` (ou o path que definires no `.env`).
+- **Treino próprio:** O projeto inclui notebook Kaggle para treinar com roof/chips_multiclass. Ver [docs/treino-unet.md](treino-unet.md) e `notebooks/kaggle_train_roof_deeplabv3.ipynb`. Precisas de pares imagem RGB + máscara multiclasse (5 classes).
+- **Sem ficheiro:** Se o path não existir ou estiver vazio, a API usa **heurística** (threshold + morfologia). Para produção é melhor treinar e colocar o `.pt` em `./models/deeplabv3_roof_multiclass.pt` (ou o path que definires no `.env`).
 
 ---
 
@@ -154,6 +154,6 @@ Nenhuma destas fontes é uma “URL de tile única” que possas colocar diretam
 | **Imagem de base** | Ortofoto ou satélite (Sentinel, Planet, etc.); URL que devolva PNG da área, ou vazio | `ORTHO_TILE_URL` |
 | **DSM Portugal** | [cdd.dgterritorio.gov.pt](https://cdd.dgterritorio.gov.pt) – descarregar DSM GeoTIFF | `LIDAR_DGT_PATH` (caminho do ficheiro) |
 | **DSM Espanha** | [centrodedescargas.cnig.es](https://centrodedescargas.cnig.es) – descarregar DSM | `LIDAR_PNOA_PATH` (caminho do ficheiro) |
-| **Modelo U-Net** | Treinar com [docs/treino-unet.md](treino-unet.md) ou deixar vazio (usa heurística) | `SEGMENTATION_MODEL_PATH` |
+| **Modelo DeepLabV3+** | Treinar com notebook Kaggle ou [docs/treino-unet.md](treino-unet.md); ou deixar vazio (usa heurística) | `SEGMENTATION_MODEL_PATH` |
 
-Para o projeto “funcionar” em termos de API e persistência, só é estritamente necessário ter **PostgreSQL + PostGIS** configurado no `DATABASE_URL`. O resto melhora a qualidade (ortofoto real, inclinação LIDAR, segmentação com U-Net) mas tem fallbacks.
+Para o projeto “funcionar” em termos de API e persistência, só é estritamente necessário ter **PostgreSQL + PostGIS** configurado no `DATABASE_URL`. O resto melhora a qualidade (ortofoto real, inclinação LIDAR, segmentação com DeepLabV3+) mas tem fallbacks.

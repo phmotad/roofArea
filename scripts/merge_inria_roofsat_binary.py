@@ -4,7 +4,7 @@ dataset binário para pré-treino: mais exemplos de "telhado vs fundo".
 
 Uso (na raiz do projeto):
   python -m scripts.merge_inria_roofsat_binary --output dados_binario_inria_roofsat
-  python -m scripts.train_unet --data_dir dados_binario_inria_roofsat --output ./models/unet_binario.pt --num_classes 1 --epochs 30
+  Treino: use o notebook kaggle_train_roof_deeplabv3.ipynb (pré-treino binário com roof/chips).
 """
 
 import argparse
@@ -82,7 +82,7 @@ def main() -> None:
 
     print("Total:", n, "pares em", out.resolve())
     if n:
-        print("Pré-treino binário: python -m scripts.train_unet --data_dir", out, "--output ./models/unet_binario.pt --num_classes 1 --epochs 30")
+        print("Pré-treino binário: use notebook kaggle_train_roof_deeplabv3.ipynb com roof/chips (data_dir=", out, ")")
 
 
 if __name__ == "__main__":

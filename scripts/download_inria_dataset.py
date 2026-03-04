@@ -8,7 +8,7 @@ Uso (na raiz do projeto):
   python -m scripts.download_inria_dataset --output_dir ./dados_inria --max_images 50
 
 Depois, para treino binário (pré-treino):
-  python -m scripts.train_unet --data_dir ./dados_inria --output ./models/unet_roof_pretrain.pt --num_classes 1 --epochs 30
+  Treino: use notebook kaggle_train_roof_deeplabv3.ipynb (pré-treino com roof/chips).
 
 Ou combinar com os teus chips: copiar dados_inria para chips_completo e depois treinar multiclasse
 com os teus 11 chips (que têm águas, claraboia, etc.) - o Inria dá milhares de exemplos de "água".
@@ -138,7 +138,7 @@ def main() -> None:
             if count >= args.max_patches_per_image:
                 break
     logger.info("Concluído. %d patches em %s", patch_idx, out_dir.resolve())
-    logger.info("Treino binário: python -m scripts.train_unet --data_dir %s --output ./models/unet_pretrain.pt --num_classes 1 --epochs 30", out_dir)
+    logger.info("Treino: use notebook kaggle_train_roof_deeplabv3.ipynb com roof/chips (data_dir=%s)", out_dir)
 
 
 if __name__ == "__main__":

@@ -11,6 +11,8 @@ WORKDIR /app
 
 COPY pyproject.toml README.md ./
 COPY src src/
+# Timeout longo para downloads grandes (PyTorch/CUDA wheels ~600MB+)
+ENV PIP_DEFAULT_TIMEOUT=600
 RUN pip install --no-cache-dir -e .
 
 COPY alembic.ini .

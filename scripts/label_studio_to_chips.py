@@ -10,8 +10,7 @@ Usage:
   python -m scripts.label_studio_to_chips --export export.json --images_dir ./my_images --output_dir ./chips
   python -m scripts.label_studio_to_chips --export export.json --images_dir ./imgs --output_dir ./chips --labels "aguas,lajes,a,b,e,calaboia"
   python -m scripts.label_studio_to_chips --export export.json --images_dir ./dados --output_dir ./chips_multiclass --multiclass
-  python -m scripts.train_unet --data_dir ./chips --output ./models/unet_roof.pt --epochs 50
-  python -m scripts.train_unet --data_dir ./chips_multiclass --output ./models/unet_roof_multiclass.pt --num_classes 5 --epochs 50
+  Treino: use o notebook notebooks/kaggle_train_roof_deeplabv3.ipynb (DeepLabV3+ com chips_multiclass).
 """
 
 import argparse
@@ -289,7 +288,7 @@ def main() -> None:
     if n == 0:
         logger.error("No tasks converted. Check --export, --images_dir and that annotations use polygon/polygonlabels.")
         sys.exit(1)
-    logger.info("Done. %d image/mask pairs in %s. Train with: python -m scripts.train_unet --data_dir %s", n, args.output_dir, args.output_dir)
+    logger.info("Done. %d image/mask pairs in %s. Train with notebook kaggle_train_roof_deeplabv3.ipynb", n, args.output_dir)
 
 
 if __name__ == "__main__":

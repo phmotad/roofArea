@@ -16,3 +16,11 @@
 
 - Permite usar a API em regiões sem cobertura LIDAR.
 - A máscara do telhado e a área plana continuam válidas; apenas inclinação e orientação deixam de ser baseadas em elevação real.
+
+## Saber que lat/lon o LIDAR cobre
+
+Para saber em que coordenadas há DSM disponível:
+
+- **Script:** `python -m scripts.list_lidar_coverage` — lista os bounds (minx, miny, maxx, maxy) de cada tile. Opções: `--geojson` (GeoJSON), `--check LAT LON` (verifica se o ponto está coberto).
+- **API:** `GET /lidar/coverage` — devolve a mesma lista em JSON. `GET /lidar/covers?lat=38.82&lon=-9.16` — devolve `{ "covers": true/false, "source": "DGT"|"PNOA", "path": "..." }` quando coberto.
+- **Código:** `from roof_api.lidar import get_lidar_coverage, lidar_covers_point` — `get_lidar_coverage()` retorna lista de dicts; `lidar_covers_point(lat, lon)` retorna `True`/`False`.

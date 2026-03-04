@@ -3,11 +3,11 @@ Prepara um dataset para treinar um modelo a prever linhas (wireframes) a partir 
 
 Usa RoofSat: para cada imagem em img_color/ (ou img/) que tenha gt/<id>.npz, desenha os
 segmentos de linha numa máscara binária (mapa de linhas). Resultado: pasta com images/ e
-masks/ no formato do train_unet, para treino binário (pixel = linha ou não).
+masks/ para treino binário (pixel = linha ou não). Treino: use notebook ou dataset com DeepLabV3+ conforme docs.
 
 Uso (na raiz do projeto):
   python -m scripts.prepare_line_dataset_from_npz --roofsat_dir dados_inria/Roofsat --output line_dataset
-  python -m scripts.train_unet --data_dir line_dataset --output ./models/unet_lines.pt --num_classes 1 --epochs 40
+  Pipeline usa apenas DeepLabV3+; modelo de linhas separado foi removido.
 """
 
 import argparse
@@ -90,7 +90,7 @@ def main() -> None:
     if count == 0:
         print("Se gt/ não tiver .npz (só .svg), não há nada a processar. O dataset oficial RoofSat inclui .npz.")
     else:
-        print("Treino: python -m scripts.train_unet --data_dir", out_dir, "--output ./models/unet_lines.pt --num_classes 1 --epochs 40")
+        print("Máscaras em", out_dir, "; pipeline usa apenas DeepLabV3+ (sem modelo de linhas separado).")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""DeepLabV3+ (torchvision) para segmentação de telhados. Interface compatível com unet_model."""
+"""DeepLabV3+ (torchvision) para segmentação de telhados."""
 
 from pathlib import Path
 from typing import Literal

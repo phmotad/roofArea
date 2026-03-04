@@ -258,7 +258,7 @@ def compute_waters(
     """
     mask: HxW bool. dsm: HxW float or None (fallback).
     bounds: (minx, miny, maxx, maxy) WGS84 for area conversion.
-    lines_map: optional HxW float (prob pixel on line) from unet_lines for splitting águas.
+    lines_map: optional HxW float (prob pixel on line) for splitting águas; not used (pipeline uses only DeepLabV3+).
     Returns list of WaterPolygon with area_plana_m2, area_real_m2, slope, aspect, polygon.
     """
     h, w = mask.shape[:2]
